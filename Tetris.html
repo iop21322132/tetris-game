@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: #222;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        canvas {
+            display: block;
+            background: #000;
+        }
+        #sidebar {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        #sidebar div {
+            background: #333;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        #controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            width: 100%;
+            max-width: 300px;
+        }
+        button {
+            padding: 15px;
+            font-size: 20px;
+            cursor: pointer;
+            background: #444;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover {
+            background: #555;
+        }
+        #menu {
+            text-align: center;
+        }
+        #menu button {
+            margin: 5px;
+        }
+        #game-over {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="menu">
+        <h1>Тетрис</h1>
+        <button id="start-btn">Начать игру</button>
+        <div>
+            <label for="speed">Скорость:</label>
+            <select id="speed">
+                <option value="500">Медленно</option>
+                <option value="300">Средне</option>
+                <option value="100">Быстро</option>
+            </select>
+        </div>
+    </div>
+    <div id="game-container" style="display: none;">
+        <canvas id="tetris" width="300" height="600"></canvas>
+        <div id="sidebar">
+            <div id="score">Счёт: 0</div>
+            <div id="high-score">Лучший счёт: 0</div>
+            <div id="next-shape">Следующая фигура:</div>
+            <canvas id="next-shape-canvas" width="120" height="120"></canvas>
+        </div>
+        <div id="controls">
+            <button id="left-btn">⬅️</button>
+            <button id="rotate-btn">🔄</button>
+            <button id="right-btn">➡️</button>
+            <button id="down-btn">⬇️</button>
+        </div>
+    </div>
+    <div id="game-over">
+        <h2>Вы проиграли!</h2>
+        <p id="final-score">Счёт: 0</p>
+        <button id="menu-btn">Главное меню</button>
+    </div>
+    <script>
+        const canvas = document.getElementById('tetris');
+        const context = canvas.getContext('2d');
+        const nextShapeCanvas = document.getElementById('next-shape-canvas');
+        const nextShapeContext = nextShapeCanvas.getContext('2d');
+        const gameOverDiv = document.getElementById('game-over');
+        const finalScore = document.getElementById('final-score');
+
+        const ROWS = 20;
+        const COLS = 10;
+        const BLOCK_SIZE = 30;
+
+        const SHAPES = [
+            [[1, 1, 1, 1]], // I
+            [[1, 1], [1, 1]], // O
+            [[1, 1, 0], [0, 1, 1]], // Z
+            [[0, 1, 1], [1, 1, 0]], // S
+            [[1, 1, 1], [0, 1, 0]], // T
+            [[1, 1, 1], [1, 0, 0]], // L
+            [[1, 1, 1], [0, 0, 1]] // J
+        ];
+
+        const COLORS = ['#FF0D72', '#0DC2FF', '#0DFF72', '#F538FF', '#FF8E0D', '#FFE138', '#3877FF'];
+
+        let grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+        let currentShape = getRandomShape();
+        let nextShape = getRandomShape();
+        let score = parseInt(localStorage.getItem('score')) || 0;
+        let highScore = parseInt(localStorage.getItem('highScore')) || 0;
+        let gameOver = false;
+        let fallSpeed = 500; // Начальная скорость падения
+        let lastTime = 0;
+
+        function getRandomShape() {
+            const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+            return {
+                shape,
+                color: COLORS[Math.floor(Math.random() * COLORS.length)],
+                x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2),
+                y: 0
+            };
+        }
+
+        function drawBlock(x, y, color, ctx) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+            ctx.strokeStyle = '#000';
+            ctx.strokeRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+        }
+
+        function drawGrid() {
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    if (grid[y][x]) {
+                        drawBlock(x, y, grid[y][x], context);
+                    }
+                }
+            }
+        }
+
+        function drawShape(shape, ctx) {
+            shape.shape.forEach((row, dy) => {
+                row.forEach((value, dx) => {
+                    if (value) {
+                        drawBlock(shape.x + dx, shape.y + dy, shape.color, ctx);
+                    }
+                });
+            });
+        }
+
+        function clearLines() {
+            let linesCleared = 0;
+            for (let y = ROWS - 1; y >= 0; y--) {
+                if (grid[y].every(cell => cell)) {
+                    grid.splice(y, 1);
+                    grid.unshift(Array(COLS).fill(0));
+                    linesCleared++;
+                }
+            }
+            if (linesCleared > 0) {
+                score += linesCleared * 100; // 100 очков за каждую линию
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('highScore', highScore); // Сохраняем лучший счёт
+                }
+                localStorage.setItem('score', score); // Сохраняем текущий счёт
+                updateUI(); // Обновляем интерфейс
+            }
+        }
+
+        function updateUI() {
+            document.getElementById('score').textContent = `Счёт: ${score}`;
+            document.getElementById('high-score').textContent = `Лучший счёт: ${highScore}`;
+        }
+
+        function update(time = 0) {
+            if (gameOver) return;
+
+            const deltaTime = time - lastTime;
+            if (deltaTime > fallSpeed) {
+                if (!checkCollision(currentShape.shape, currentShape.x, currentShape.y + 1)) {
+                    currentShape.y++;
+                } else {
+                    placeShape();
+                    clearLines();
+                    currentShape = nextShape;
+                    nextShape = getRandomShape();
+                    if (checkCollision(currentShape.shape, currentShape.x, currentShape.y)) {
+                        gameOver = true;
+                        showGameOver();
+                    }
+                }
+                lastTime = time;
+            }
+
+            drawGrid();
+            drawShape(currentShape, context);
+            drawNextShape();
+            requestAnimationFrame(update);
+        }
+
+        function placeShape() {
+            currentShape.shape.forEach((row, dy) => {
+                row.forEach((value, dx) => {
+                    if (value) {
+                        grid[currentShape.y + dy][currentShape.x + dx] = currentShape.color;
+                    }
+                });
+            });
+        }
+
+        function checkCollision(shape, x, y) {
+            for (let dy = 0; dy < shape.length; dy++) {
+                for (let dx = 0; dx < shape[dy].length; dx++) {
+                    if (shape[dy][dx]) {
+                        const newX = x + dx;
+                        const newY = y + dy;
+                        if (newX < 0 || newX >= COLS || newY >= ROWS || grid[newY][newX]) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function drawNextShape() {
+            nextShapeContext.clearRect(0, 0, nextShapeCanvas.width, nextShapeCanvas.height);
+            drawShape({ ...nextShape, x: 1, y: 1 }, nextShapeContext);
+        }
+
+        function moveLeft() {
+            if (!checkCollision(currentShape.shape, currentShape.x - 1, currentShape.y)) {
+                currentShape.x--;
+            }
+        }
+
+        function moveRight() {
+            if (!checkCollision(currentShape.shape, currentShape.x + 1, currentShape.y)) {
+                currentShape.x++;
+            }
+        }
+
+        function rotate() {
+            const rotatedShape = rotateShape(currentShape.shape);
+            if (!checkCollision(rotatedShape, currentShape.x, currentShape.y)) {
+                currentShape.shape = rotatedShape;
+            }
+        }
+
+        function moveDown() {
+            if (!checkCollision(currentShape.shape, currentShape.x, currentShape.y + 1)) {
+                currentShape.y++;
+            }
+        }
+
+        function rotateShape(shape) {
+            return shape[0].map((_, i) => shape.map(row => row[i]).reverse());
+        }
+
+        function showGameOver() {
+            finalScore.textContent = `Счёт: ${score}`;
+            gameOverDiv.style.display = 'block';
+        }
+
+        function resetGame() {
+            grid = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+            currentShape = getRandomShape();
+            nextShape = getRandomShape();
+            score = 0;
+            gameOver = false;
+            localStorage.setItem('score', score); // Сбрасываем текущий счёт
+            updateUI();
+            gameOverDiv.style.display = 'none';
+            requestAnimationFrame(update);
+        }
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('game-container').style.display = 'flex';
+            fallSpeed = parseInt(document.getElementById('speed').value);
+            resetGame();
+        });
+
+        document.getElementById('menu-btn').addEventListener('click', () => {
+            document.getElementById('game-container').style.display = 'none';
+            document.getElementById('menu').style.display = 'block';
+            gameOverDiv.style.display = 'none';
+        });
+
+        document.getElementById('left-btn').addEventListener('click', moveLeft);
+        document.getElementById('right-btn').addEventListener('click', moveRight);
+        document.getElementById('rotate-btn').addEventListener('click', rotate);
+        document.getElementById('down-btn').addEventListener('click', moveDown);
+
+        updateUI();
+    </script>
+</body>
+</html>
