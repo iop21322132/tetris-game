@@ -39,13 +39,6 @@
             border-radius: 5px;
             text-align: center;
         }
-        #controls {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            width: 100%;
-            max-width: 300px;
-        }
         button {
             padding: 15px;
             font-size: 20px;
@@ -75,6 +68,12 @@
             border-radius: 10px;
             text-align: center;
         }
+        #middle-controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
@@ -91,18 +90,17 @@
         </div>
     </div>
     <div id="game-container" style="display: none;">
-        <canvas id="tetris" width="300" height="600"></canvas>
+        <canvas id="tetris" width="240" height="480"></canvas> <!-- Уменьшили размер -->
         <div id="sidebar">
             <div id="score">Счёт: 0</div>
+            <div id="middle-controls"> <!-- Кнопки управления -->
+                <button id="left-btn-middle">⬅️</button>
+                <button id="rotate-btn-middle">🔄</button>
+                <button id="right-btn-middle">➡️</button>
+            </div>
             <div id="high-score">Лучший счёт: 0</div>
             <div id="next-shape">Следующая фигура:</div>
             <canvas id="next-shape-canvas" width="120" height="120"></canvas>
-        </div>
-        <div id="controls">
-            <button id="left-btn">⬅️</button>
-            <button id="rotate-btn">🔄</button>
-            <button id="right-btn">➡️</button>
-            <button id="down-btn">⬇️</button>
         </div>
     </div>
     <div id="game-over">
@@ -120,7 +118,7 @@
 
         const ROWS = 20;
         const COLS = 10;
-        const BLOCK_SIZE = 30;
+        const BLOCK_SIZE = 24; // Уменьшили размер блока
 
         const SHAPES = [
             [[1, 1, 1, 1]], // I
@@ -281,12 +279,6 @@
             }
         }
 
-        function moveDown() {
-            if (!checkCollision(currentShape.shape, currentShape.x, currentShape.y + 1)) {
-                currentShape.y++;
-            }
-        }
-
         function rotateShape(shape) {
             return shape[0].map((_, i) => shape.map(row => row[i]).reverse());
         }
@@ -321,10 +313,10 @@
             gameOverDiv.style.display = 'none';
         });
 
-        document.getElementById('left-btn').addEventListener('click', moveLeft);
-        document.getElementById('right-btn').addEventListener('click', moveRight);
-        document.getElementById('rotate-btn').addEventListener('click', rotate);
-        document.getElementById('down-btn').addEventListener('click', moveDown);
+        // Обработчики для кнопок управления
+        document.getElementById('left-btn-middle').addEventListener('click', moveLeft);
+        document.getElementById('rotate-btn-middle').addEventListener('click', rotate);
+        document.getElementById('right-btn-middle').addEventListener('click', moveRight);
 
         updateUI();
     </script>
